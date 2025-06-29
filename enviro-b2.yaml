@@ -21,11 +21,11 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "cx2SCavjOIVpOHAK4oVI6LmHm2a3VbRpdGVbYVavVT0="
+    key: !secret enviro_b2_api_key
 
 ota:
 - platform: esphome
-  password: "8ae36d178a96f2baa09949a30d06bd3b"
+  password: !secret enviro_b2_ota_pwd
 
 # Sync time with Home Assistant
 time:
@@ -58,8 +58,8 @@ wifi:
         - lambda: |-
             ESP.restart();
   ap:
-    ssid: "E2BU"
-    password: "X0QHHpq6mX7T"
+    ssid: !secret enviro_b2_ap_sid
+    password: !secret enviro_b2_ap_pwd
 
 # captive_portal:
 
@@ -82,12 +82,45 @@ sensor:
     filters:
     - lambda: return x + ${humidity_calibration};
   update_interval: ${update_interval_s}
+- platform: uptime
+  id: enviro_b2_uptime_sensor
+  name: "ENVIRO-B2 Uptime"
 
 binary_sensor:
 - platform: status
   name: "Connection Status"
   id: connection_status
   entity_category: diagnostic
+
+- platform: homeassistant
+  name: "Reboot ENVIRO-B2 Trigger"
+  entity_id: input_boolean.reboot_enviro_b2
+  id: reboot_trigger
+  on_press:
+  - if:
+      condition:
+        lambda: 'return id(enviro_b2_uptime_sensor).state > 60;'
+      then:
+      - logger.log: "Manual reboot requested via Home Assistant (passes debounce)"
+      # - repeat:
+      #    count: 6   # 6 cycles x 500ms = 3 seconds
+      #    then:
+      #      - switch.turn_on: onboard_led
+      #      - delay: 250ms
+      #      - switch.turn_off: onboard_led
+      #      - delay: 250ms
+      - homeassistant.service:
+          service: input_boolean.turn_off
+          data:
+            entity_id: input_boolean.reboot_enviro_b2
+      - logger.log: "Device rebooting now"
+      - switch.turn_on: reboot_enviro_b2_restart
+      else:
+      - logger.log: "Debounce blocked reboot: uptime too short"
+      - homeassistant.service:
+          service: input_boolean.turn_off
+          data:
+            entity_id: input_boolean.reboot_enviro_b2
 
 # Define the onboard LED
 switch:
@@ -96,5 +129,6 @@ switch:
   pin: 2
   id: onboard_led
   inverted: false # Adjust this if your LED logic is not inverted
-- platform: restart # Restart Switch
+- platform: restart
   name: "Reboot_ENVIRO-B2"
+  id: reboot_enviro_b2_restart
