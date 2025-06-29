@@ -97,4 +97,4 @@ switch:
   id: onboard_led
   inverted: false # Adjust this if your LED logic is not inverted
 - platform: restart # Restart Switch
-  name: "Enviro2 Node Reboot"
+  name: "Reboot_ENVIRO-B2"
