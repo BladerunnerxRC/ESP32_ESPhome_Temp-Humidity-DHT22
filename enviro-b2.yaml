@@ -16,7 +16,8 @@ esp32:
 
 # Enable logging
 logger:
-  level: WARN #INFO VERY_VERBOSE ERROR
+  level: DEBUG #WARN INFO VERY_VERBOSE ERROR
+  baud_rate: 0 # Disables serial UART output if unused
 
 # Enable Home Assistant API
 api:
