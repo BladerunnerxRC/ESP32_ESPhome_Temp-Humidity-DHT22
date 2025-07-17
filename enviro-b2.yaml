@@ -1,6 +1,6 @@
 # ESPhome configuration for the ENVIRO-B2 ESP32 board.
 #
-# works on ESPHome 2025.7.0 FW
+# works on INFO ESPHome 2025.7.1 FW for HW
 # GPIO Pin usage:
 #   GPIO2  - Onboard status LED
 #   GPIO26 - DHT22 data pin
