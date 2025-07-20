@@ -61,6 +61,12 @@ wifi:
   on_connect:
     then:
       - switch.turn_on: onboard_led
+      - logger.log: "WiFi connected"
+      - homeassistant.service:
+          service: persistent_notification.create
+          data:
+            title: "ENVIRO-B2"
+            message: "WiFi connection established"
   on_disconnect:
     then:
       - switch.turn_off: onboard_led
