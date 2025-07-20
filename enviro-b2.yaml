@@ -60,7 +60,7 @@ wifi:
   # Turn on the LED when connected and restart the board if the connection is lost.
   # This will also create a persistent notification in Home Assistant.
   # If the connection is lost for more than 30 seconds, the device will restart.
-    on_connect:
+  on_connect:
     then:
       - switch.turn_on: onboard_led
       - logger.log: "WiFi connected"
