@@ -1,6 +1,6 @@
 # ESPhome configuration for the ENVIRO-B2 ESP32 board.
 #
-# works on INFO ESPHome 2025.7.2 FW for HW
+# works on INFO ESPHome 2025.7.1 FW for HW
 # GPIO Pin usage:
 #   GPIO2  - Onboard status LED
 #   GPIO26 - DHT22 data pin
@@ -57,10 +57,8 @@ wifi:
     subnet: 255.255.255.0
     dns1: 8.8.8.8
     dns2: 8.8.4.4
-  # Turn on the LED when connected and restart the board if the connection is lost.
-  # This will also create a persistent notification in Home Assistant.
-  # If the connection is lost for more than 30 seconds, the device will restart.
-    on_connect:
+  # Turn on the LED when connected and restart the board if the connection is lost
+  on_connect:
     then:
       - switch.turn_on: onboard_led
       - logger.log: "WiFi connected"
