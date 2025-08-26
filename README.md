@@ -7,6 +7,8 @@ a restart trigger.
 
 # Confirmed to work with ESPHome v2025.8.1
 
+[Changelog](https://esphome.io/changelog/2025.8.0/#release-202581---august-25)
+
 ## GPIO Assignments
 
 | Pin   | Purpose                     |
