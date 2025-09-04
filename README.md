@@ -5,7 +5,7 @@ DHT22 temperature/humidity sensor. The project exposes the sensor readings to
 Home Assistant and provides a few helper automations such as Wi-Fi status and
 a restart trigger.
 
-# Confirmed to work with ESPHome v2025.8.2
+# Confirmed to work with ESPHome v2025.8.3
 
 [Changelog](https://esphome.io/changelog/2025.8.0/#release-202581---august-25)
 
