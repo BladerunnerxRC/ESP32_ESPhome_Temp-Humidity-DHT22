@@ -1,6 +1,10 @@
 # ESPhome configuration for the ENVIRO-B2 ESP32 board.
 #
-# works on INFO ESPHome 2025.7.2 FW for HW
+# works on INFO ESPHome 2025.7.4 FW for HW
+#   - ESP32-D0WDQ6 (revision v1.0)
+#   - Features: WiFi, BT, Dual Core, Coding Scheme None
+#   - 40MHz crystal
+#   - 4MB flash
 # GPIO Pin usage:
 #   GPIO2  - Onboard status LED
 #   GPIO26 - DHT22 data pin
