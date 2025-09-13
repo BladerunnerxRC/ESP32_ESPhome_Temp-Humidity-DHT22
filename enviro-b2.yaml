@@ -5,6 +5,15 @@
 #   - Features: WiFi, BT, Dual Core, Coding Scheme None
 #   - 40MHz crystal
 #   - 4MB flash
+
+# -------------------------------
+# GPIO Pin Assignments Table
+# -------------------------------
+# | Function                | GPIO Pin | Notes                        |
+# |-------------------------|----------|------------------------------|
+# | DHT22 data pin          | GPIO26   | Data line for DHT22          |
+# | Onboard LED (WiFi LED)  | GPIO2    | Controls onboard status LED  |
+# -------------------------------
 # GPIO Pin usage:
 #   GPIO2  - Onboard status LED
 #   GPIO26 - DHT22 data pin
