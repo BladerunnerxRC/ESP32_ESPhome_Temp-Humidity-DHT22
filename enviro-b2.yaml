@@ -100,11 +100,17 @@ sensor:
     pin: GPIO26
     temperature:
       name: "DHT22_Temperature"
+      device_class: temperature
+      state_class: measurement
+      unit_of_measurement: "°C"
       id: temp
       filters:
         - lambda: return x + ${temperature_calibration};
     humidity:
       name: "DHT22_Humidity"
+      device_class: humidity
+      state_class: measurement
+      unit_of_measurement: "%"
       id: humidity
       filters:
         - lambda: return x + ${humidity_calibration};
