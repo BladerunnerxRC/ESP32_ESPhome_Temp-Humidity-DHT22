@@ -144,16 +144,22 @@ sensor:
   - platform: dht
     id: dht22_component
     pin: GPIO26
+    model: DHT22
     temperature:
       name: "DHT22_Temperature"
       id: temp
       filters:
-        - lambda: return x + ${temperature_calibration};
+        - lambda: |-
+            // Use the runtime-adjustable global, not a substitution
+            if (isnan(x)) return x;
+            return x + id(g_temperature_calibration);
     humidity:
       name: "DHT22_Humidity"
       id: humidity
       filters:
-        - lambda: return x + ${humidity_calibration};
+        - lambda: |-
+            if (isnan(x)) return x;
+            return x + id(g_humidity_calibration);
     update_interval: ${update_interval_s}
 
   # How long the device has been running
