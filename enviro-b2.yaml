@@ -148,15 +148,32 @@ sensor:
     temperature:
       name: "DHT22_Temperature"
       id: temp
-      filters:
+      accuracy_decimals: 1
+      filters:  # DHT median + clamp + NaN filter
+        - filter_out: nan
+        - clamp:
+            min_value: -40
+            max_value: 80
+        - median:
+            window_size: 5
+            send_every: 1
+            send_first_at: 1
         - lambda: |-
-            // Use the runtime-adjustable global, not a substitution
             if (isnan(x)) return x;
             return x + id(g_temperature_calibration);
     humidity:
       name: "DHT22_Humidity"
       id: humidity
-      filters:
+      accuracy_decimals: 1
+      filters: # DHT median + clamp + NaN filter
+        - filter_out: nan
+        - clamp:
+            min_value: 0
+            max_value: 100
+        - median:
+            window_size: 5
+            send_every: 1
+            send_first_at: 1
         - lambda: |-
             if (isnan(x)) return x;
             return x + id(g_humidity_calibration);
