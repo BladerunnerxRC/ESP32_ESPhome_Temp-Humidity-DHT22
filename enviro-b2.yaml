@@ -137,7 +137,7 @@ sensor:
   - platform: wifi_signal
     name: "WiFi Signal"
     id: wifi_signal_sensor
-    update_interval: ${update_interval_wifi}
+    update_interval: never # Turn native intervals off to use Interval Triggers
     device_class: signal_strength
 
   # Temperature and humidity from a DHT22 sensor
@@ -166,6 +166,28 @@ sensor:
   - platform: uptime
     id: enviro_b2_uptime_sensor
     name: "ENVIRO-B2 Uptime"
+
+# runtime-tunable rates that use globals
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          static uint32_t last = 0;
+          const uint32_t now = millis() / 1000;
+          if (now - last >= id(g_update_interval_s)) {
+            last = now;
+            id(dht22_component).update();
+          }
+
+  - interval: 1s
+    then:
+      - lambda: |-
+          static uint32_t last_wifi = 0;
+          const uint32_t now = millis() / 1000;
+          if (now - last_wifi >= id(g_update_interval_wifi)) {
+            last_wifi = now;
+            id(wifi_signal_sensor).update();
+          }
 
 binary_sensor:
   # Show if the device is online
