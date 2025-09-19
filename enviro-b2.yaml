@@ -90,12 +90,52 @@ wifi:
     ssid: !secret enviro_b2_ap_sid
     password: !secret enviro_b2_ap_pwd
 
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: false
+  frequency: 400kHz
+
+font:
+  - file: "gfonts://Roboto"
+    id: oled_font_large
+    size: 20
+  - file: "gfonts://Roboto"
+    id: oled_font_small
+    size: 14
+
+display:
+  - platform: ssd1306_i2c
+    id: enviro_oled
+    model: "SSD1306 128x64"
+    address: 0x3C
+    update_interval: ${update_interval_s}
+    lambda: |-
+      it.fill(Color::BLACK);
+      if (id(temp).has_state()) {
+        const float temp_f = id(temp).state * 1.8f + 32.0f;
+        it.printf(0, 0, id(oled_font_large), "Temp: %.1f°F", temp_f);
+      } else {
+        it.print(0, 0, id(oled_font_large), "Temp: --°F");
+      }
+      if (id(humidity).has_state()) {
+        it.printf(0, 36, id(oled_font_small), "Humidity: %.1f%%", id(humidity).state);
+      } else {
+        it.print(0, 36, id(oled_font_small), "Humidity: --%");
+      }
+      if (id(wifi_signal_dbm).has_state()) {
+        it.printf(0, 52, id(oled_font_small), "WiFi: %.0f dBm", id(wifi_signal_dbm).state);
+      } else {
+        it.print(0, 52, id(oled_font_small), "WiFi: -- dBm");
+      }
+
 # captive_portal:
 
 sensor:
   # Report Wi-Fi signal strength
   - platform: wifi_signal
     name: "WiFi Signal"
+    id: wifi_signal_dbm
     update_interval: ${update_interval_wifi}
     device_class: signal_strength
 
