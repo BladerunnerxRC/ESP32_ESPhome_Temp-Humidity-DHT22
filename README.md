@@ -5,9 +5,7 @@ DHT22 temperature/humidity sensor. The project exposes the sensor readings to
 Home Assistant, mirrors them on an SSD1306 OLED display, and provides a few
 helper automations such as Wi-Fi status and a restart trigger.
 
-# Confirmed to work with ESPHome v2025.8.4
-
-[Changelog](https://esphome.io/changelog/2025.8.0/#release-202581---august-25)
+# Confirmed to work with ESPHome v2025.9.1
 
 ## GPIO Assignments
 

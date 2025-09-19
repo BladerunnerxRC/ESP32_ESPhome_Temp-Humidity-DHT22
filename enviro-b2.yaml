@@ -1,10 +1,19 @@
 # ESPhome configuration for the ENVIRO-B2 ESP32 board.
 #
-# works on INFO ESPHome 2025.7.4 FW for HW
+# works on INFO ESPHome 2025.9.1 FW for HW
 #   - ESP32-D0WDQ6 (revision v1.0)
 #   - Features: WiFi, BT, Dual Core, Coding Scheme None
 #   - 40MHz crystal
 #   - 4MB flash
+
+# -------------------------------
+# GPIO Pin Assignments Table
+# -------------------------------
+# | Function                | GPIO Pin | Notes                        |
+# |-------------------------|----------|------------------------------|
+# | DHT22 data pin          | GPIO26   | Data line for DHT22          |
+# | Onboard LED (WiFi LED)  | GPIO2    | Controls onboard status LED  |
+# -------------------------------
 # GPIO Pin usage:
 #   GPIO2  - Onboard status LED
 #   GPIO26 - DHT22 data pin
@@ -17,21 +26,46 @@ substitutions:
   update_interval_s: "30s"
   update_interval_wifi: "60s"
 
+globals:
+  - id: g_temperature_calibration
+    type: float
+    restore_value: true
+    initial_value: "${temperature_calibration}"
+  - id: g_humidity_calibration
+    type: float
+    restore_value: true
+    initial_value: "${humidity_calibration}"
+  - id: g_update_interval_s
+    type: int
+    restore_value: true
+    initial_value: "30"
+  - id: g_update_interval_wifi
+    type: int
+    restore_value: true
+    initial_value: "60"
+
 esphome:
   name: "enviro-b2"
   friendly_name: ENVIRO-B2
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          id(g_update_interval_s) = atoi("${update_interval_s}");
+          id(g_update_interval_wifi) = atoi("${update_interval_wifi}");
 
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
     version: recommended # Options: recommended, dev, or latest
 
 # Enable detailed logging. UART output is disabled because the serial port
 # is not used in normal operation.
 logger:
   level: DEBUG # Options: ERROR, WARN, INFO, DEBUG, VERY_VERBOSE
-  baud_rate: 0
+  baud_rate: 115200 # enable UART logging for debugging
+  # baud_rate: 0 # disable UART logging
 
 # Enable the Home Assistant API with encrypted communication
 api:
@@ -73,18 +107,24 @@ wifi:
           data:
             title: "ENVIRO-B2"
             message: "WiFi connection established"
+
+  # Handle disconnection: wait 30s, then only restart if still offline
   on_disconnect:
     then:
-      - switch.turn_off: onboard_led
-      - logger.log: "WiFi disconnected. Waiting 30 seconds before deciding to restart."
+      - switch.turn_off:
+          id: onboard_led
+      - logger.log: "WiFi disconnected. Waiting 30 seconds before restart."
       - delay: 30s
       - if:
           condition:
-            lambda: 'return !WiFi.isConnected();'
+            wifi.connected: {}       # use {} here
           then:
-            - logger.log: "WiFi still disconnected after delay. Restarting now."
-            - lambda: |-
-                ESP.restart();
+            - logger.log: "WiFi reconnected during delay, not restarting."
+          else:
+            - logger.log: "Still disconnected, restarting now."
+            - switch.turn_on:
+                id: reboot_enviro_b2_restart
+
   # Fallback access point settings
   ap:
     ssid: !secret enviro_b2_ap_sid
@@ -114,9 +154,9 @@ display:
       it.fill(Color::BLACK);
       if (id(temp).has_state()) {
         const float temp_f = id(temp).state * 1.8f + 32.0f;
-        it.printf(0, 0, id(oled_font_large), "Temp: %.1f°F", temp_f);
+        it.printf(0, 0, id(oled_font_small), "Temp: %.1f°F", temp_f);
       } else {
-        it.print(0, 0, id(oled_font_large), "Temp: --°F");
+        it.print(0, 0, id(oled_font_small), "Temp: --°F");
       }
       if (id(humidity).has_state()) {
         it.printf(0, 36, id(oled_font_small), "Humidity: %.1f%%", id(humidity).state);
@@ -129,35 +169,84 @@ display:
         it.print(0, 52, id(oled_font_small), "WiFi: -- dBm");
       }
 
-# captive_portal:
+
+# captive_portal: # (Optional) Enable captive portal for fallback AP
 
 sensor:
   # Report Wi-Fi signal strength
   - platform: wifi_signal
     name: "WiFi Signal"
     id: wifi_signal_dbm
-    update_interval: ${update_interval_wifi}
+    update_interval: never # Turn native intervals off to use Interval Triggers
     device_class: signal_strength
 
   # Temperature and humidity from a DHT22 sensor
   - platform: dht
-    pin: GPIO26
+    id: dht22_component
+    pin: 
+      number: GPIO26
+      mode: INPUT_PULLUP        # helps if your external pull-up is marginal
+    model: DHT22
     temperature:
       name: "DHT22_Temperature"
       id: temp
-      filters:
-        - lambda: return x + ${temperature_calibration};
+      accuracy_decimals: 1
+      filters:  # DHT median + clamp + NaN filter
+        - filter_out: nan
+        - clamp:
+            min_value: -40
+            max_value: 80
+        - median:
+            window_size: 5
+            send_every: 1
+            send_first_at: 1
+        - lambda: |-
+            if (isnan(x)) return x;
+            return x + id(g_temperature_calibration);
     humidity:
       name: "DHT22_Humidity"
       id: humidity
-      filters:
-        - lambda: return x + ${humidity_calibration};
+      accuracy_decimals: 1
+      filters: # DHT median + clamp + NaN filter
+        - filter_out: nan
+        - clamp:
+            min_value: 0
+            max_value: 100
+        - median:
+            window_size: 5
+            send_every: 1
+            send_first_at: 1
+        - lambda: |-
+            if (isnan(x)) return x;
+            return x + id(g_humidity_calibration);
     update_interval: ${update_interval_s}
 
   # How long the device has been running
   - platform: uptime
     id: enviro_b2_uptime_sensor
     name: "ENVIRO-B2 Uptime"
+
+# runtime-tunable rates that use globals
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          static uint32_t last = 0;
+          const uint32_t now = millis() / 1000;
+          if (now - last >= id(g_update_interval_s)) {
+            last = now;
+            id(dht22_component).update();
+          }
+
+  - interval: 1s
+    then:
+      - lambda: |-
+          static uint32_t last_wifi = 0;
+          const uint32_t now = millis() / 1000;
+          if (now - last_wifi >= id(g_update_interval_wifi)) {
+            last_wifi = now;
+            id(wifi_signal_dbm).update();
+          }
 
 binary_sensor:
   # Show if the device is online
@@ -191,7 +280,6 @@ binary_sensor:
                 data:
                   entity_id: input_boolean.reboot_enviro_b2
 
-# Define the onboard LED
 switch:
   # Controls the onboard LED connected to GPIO2
   - platform: gpio
@@ -204,3 +292,69 @@ switch:
   - platform: restart
     name: "Reboot_ENVIRO-B2"
     id: reboot_enviro_b2_restart
+
+button:
+  - platform: template
+    name: "Refresh Sensors"
+    id: refresh_sensors
+    on_press:
+      - component.update: dht22_component
+      - component.update: wifi_signal_dbm
+      - component.update: enviro_b2_uptime_sensor
+
+number:
+  - platform: template
+    name: "Temperature Calibration"
+    id: temperature_calibration_number
+    min_value: -10
+    max_value: 10
+    step: 0.1
+    restore_value: true
+    initial_value: ${temperature_calibration}
+    set_action:
+      - globals.set:
+          id: g_temperature_calibration
+          value: !lambda 'return x;'
+      - button.press: refresh_sensors
+
+  - platform: template
+    name: "Humidity Calibration"
+    id: humidity_calibration_number
+    min_value: -10
+    max_value: 10
+    step: 0.1
+    restore_value: true
+    initial_value: ${humidity_calibration}
+    set_action:
+      - globals.set:
+          id: g_humidity_calibration
+          value: !lambda 'return x;'
+      - button.press: refresh_sensors
+
+  - platform: template
+    name: "Update Interval (s)"
+    id: update_interval_seconds_number
+    min_value: 10
+    max_value: 3600
+    step: 1
+    restore_value: true
+    initial_value: 30
+    set_action:
+      - globals.set:
+          id: g_update_interval_s
+          value: !lambda 'return (int)x;'
+      - button.press: refresh_sensors
+
+  - platform: template
+    name: "WiFi Update Interval (s)"
+    id: update_interval_wifi_seconds_number
+    min_value: 10
+    max_value: 3600
+    step: 1
+    restore_value: true
+    initial_value: 60
+    set_action:
+      - globals.set:
+          id: g_update_interval_wifi
+          value: !lambda 'return (int)x;'
+      - button.press: refresh_sensors
