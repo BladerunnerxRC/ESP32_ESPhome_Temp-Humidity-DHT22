@@ -236,7 +236,7 @@ sensor:
         - lambda: |-
             if (isnan(x)) return x;
             return x + id(g_humidity_calibration);
-    update_interval: ${update_interval_s}
+    update_interval: never # ${update_interval_s}
 
   # How long the device has been running
   - platform: uptime
