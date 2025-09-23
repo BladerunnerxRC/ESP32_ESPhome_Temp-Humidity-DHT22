@@ -48,6 +48,10 @@ globals:
     type: int
     restore_value: true
     initial_value: "60"
+  - id: g_wifi_connected
+    type: bool
+    restore_value: false
+    initial_value: 'false'
 
 esphome:
   name: "enviro-b2"
@@ -105,6 +109,8 @@ wifi:
   # If the connection is lost for more than 30 seconds, the device will restart.
   on_connect:
     then:
+      - lambda: 'id(g_wifi_connected) = true;'
+      - component.update: enviro_oled     # redraw now
       - switch.turn_on: onboard_led
       - logger.log: "WiFi connected"
       - homeassistant.service:
@@ -116,19 +122,19 @@ wifi:
   # Handle disconnection: wait 30s, then only restart if still offline
   on_disconnect:
     then:
-      - switch.turn_off:
-          id: onboard_led
+      - lambda: 'id(g_wifi_connected) = false;'
+      - component.update: enviro_oled     # hide icon immediately
+      - switch.turn_off: onboard_led
       - logger.log: "WiFi disconnected. Waiting 30 seconds before restart."
       - delay: 30s
       - if:
           condition:
-            wifi.connected: {}       # use {} here
+            wifi.connected: {}
           then:
             - logger.log: "WiFi reconnected during delay, not restarting."
           else:
             - logger.log: "Still disconnected, restarting now."
-            - switch.turn_on:
-                id: reboot_enviro_b2_restart
+            - switch.turn_on: reboot_enviro_b2_restart
 
   # Fallback access point settings
   ap:
@@ -164,6 +170,7 @@ display:
     update_interval: ${update_interval_s}
     lambda: |-
       it.fill(Color::BLACK);
+
       if (id(temp).has_state()) {
         const float temp_f = id(temp).state * 1.8f + 32.0f;
         it.printf(0, 0, id(oled_font_small), "Temp: %.1f°F", temp_f);
@@ -183,8 +190,12 @@ display:
         it.print(0, 22, id(oled_font_small), "WiFi: -- dBm");
       }
 
-      // Draw WiFi icon (top-right corner)
-      it.image(103, 5, id(img_wifi), Color(255, 255, 255));
+      // Only show the Wi-Fi icon when connected
+      if (id(g_wifi_connected)) {
+        // center vertically: (32-16)/2 = 8; right-align: 128-19-3 = 106 (3px margin)
+        it.image(106, 8, id(img_wifi), Color(255, 255, 255));
+      }
+      // else: do not show the icon when not connected
 
 
 # captive_portal: # (Optional) Enable captive portal for fallback AP
