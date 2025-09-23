@@ -6,17 +6,22 @@
 #   - 40MHz crystal
 #   - 4MB flash
 
-# -------------------------------
-# GPIO Pin Assignments Table
-# -------------------------------
-# | Function                | GPIO Pin | Notes                        |
-# |-------------------------|----------|------------------------------|
-# | DHT22 data pin          | GPIO26   | Data line for DHT22          |
-# | Onboard LED (WiFi LED)  | GPIO2    | Controls onboard status LED  |
-# -------------------------------
-# GPIO Pin usage:
-#   GPIO2  - Onboard status LED
-#   GPIO26 - DHT22 data pin
+# ┌───────────────────────────────────────────────┐
+# │         GPIO Pin Assignment Table             │
+# ├─────────────┬─────────────────────────────────┤
+# │ GPIO Number │ Function                        │
+# ├─────────────┼─────────────────────────────────┤
+# │ GPIO4       │ DHT22 Data                      │
+# │ GPIO5       │ I²C SDA (OLED Display)          │
+# │ GPIO18      │ I²C SCL (OLED Display)          │
+# │ GPIO2       │ Status LED (optional - Internal)│
+# │ GPIO16      │ WiFi Signal Sensor (internal)   │
+# └─────────────┴─────────────────────────────────┘
+#
+# Notes:
+# - OLED uses SSD1306 128x32 over I²C at address 0x3C
+# - DHT22 sensor reports temperature and humidity
+# - WiFi signal strength is reported via ESP internal sensor
 
 substitutions:
   # Calibration offsets applied to the DHT22 readings
@@ -144,6 +149,13 @@ font:
     id: oled_font_small
     size: 10
 
+# create directory homeassistant/esphome/images and upload to folder for compiling
+image:
+  - file: "images/wifi.png"
+    id: img_wifi
+    resize: 19x16
+    type: BINARY
+
 display:
   - platform: ssd1306_i2c
     id: enviro_oled
@@ -158,16 +170,21 @@ display:
       } else {
         it.print(0, 0, id(oled_font_small), "Temp: --°F");
       }
+
       if (id(humidity).has_state()) {
         it.printf(0, 11, id(oled_font_small), "Humidity: %.1f%%", id(humidity).state);
       } else {
         it.print(0, 11, id(oled_font_small), "Humidity: --%");
       }
+
       if (id(wifi_signal_dbm).has_state()) {
         it.printf(0, 22, id(oled_font_small), "WiFi: %.0f dBm", id(wifi_signal_dbm).state);
       } else {
         it.print(0, 22, id(oled_font_small), "WiFi: -- dBm");
       }
+
+      // Draw WiFi icon (top-right corner)
+      it.image(103, 5, id(img_wifi), Color(255, 255, 255));
 
 
 # captive_portal: # (Optional) Enable captive portal for fallback AP
