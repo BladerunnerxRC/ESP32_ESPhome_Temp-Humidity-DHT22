@@ -142,12 +142,12 @@ font:
     size: 20
   - file: "gfonts://Roboto"
     id: oled_font_small
-    size: 14
+    size: 10
 
 display:
   - platform: ssd1306_i2c
     id: enviro_oled
-    model: "SSD1306 128x64"
+    model: "SSD1306 128x32"
     address: 0x3C
     update_interval: ${update_interval_s}
     lambda: |-
@@ -159,14 +159,14 @@ display:
         it.print(0, 0, id(oled_font_small), "Temp: --°F");
       }
       if (id(humidity).has_state()) {
-        it.printf(0, 36, id(oled_font_small), "Humidity: %.1f%%", id(humidity).state);
+        it.printf(0, 11, id(oled_font_small), "Humidity: %.1f%%", id(humidity).state);
       } else {
-        it.print(0, 36, id(oled_font_small), "Humidity: --%");
+        it.print(0, 11, id(oled_font_small), "Humidity: --%");
       }
       if (id(wifi_signal_dbm).has_state()) {
-        it.printf(0, 52, id(oled_font_small), "WiFi: %.0f dBm", id(wifi_signal_dbm).state);
+        it.printf(0, 22, id(oled_font_small), "WiFi: %.0f dBm", id(wifi_signal_dbm).state);
       } else {
-        it.print(0, 52, id(oled_font_small), "WiFi: -- dBm");
+        it.print(0, 22, id(oled_font_small), "WiFi: -- dBm");
       }
 
 
