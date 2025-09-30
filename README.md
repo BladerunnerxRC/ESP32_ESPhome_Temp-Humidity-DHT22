@@ -5,20 +5,18 @@ DHT22 temperature/humidity sensor. The project exposes the sensor readings to
 Home Assistant, mirrors them on an SSD1306 OLED display, and provides a few
 helper automations such as Wi-Fi status and a restart trigger.
 
-# Confirmed to work with ESPHome v2025.9.1
+# Confirmed to work with ESPHome v2025.9.2
 
 ## GPIO Assignments
 
 | Pin   | Purpose                     |
 |-------|-----------------------------|
 | GPIO2  | Onboard status LED (optional - Internal) |
-| GPIO4  | DHT22 Data                 |
-| GPIO5  | I²C SDA (OLED Display)     |
+| GPI26  | DHT22 Data                 |
+| GPI21  | I²C SDA (OLED Display)     |
 | GPIO16 | WiFi Signal Sensor (internal) |
-| GPIO18 | I²C SCL (OLED Display)     |
-| GPIO21 | (Unused in current config) |
-| GPIO22 | (Unused in current config) |
-| GPIO26 | (Unused in current config) |
+| GPI22  | I²C SCL (OLED Display)     |
+
 
 display refreshes at the same interval as the DHT22 sensor updates.
 
