@@ -1,6 +1,6 @@
 # ESPhome configuration for the ENVIRO-B2 ESP32 board.
 #
-# works on INFO ESPHome 2025.9.1 FW for HW
+# works on INFO ESPHome 2025.9.2 FW for HW
 #   - ESP32-D0WDQ6 (revision v1.0)
 #   - Features: WiFi, BT, Dual Core, Coding Scheme None
 #   - 40MHz crystal
@@ -11,9 +11,9 @@
 # ├─────────────┬─────────────────────────────────┤
 # │ GPIO Number │ Function                        │
 # ├─────────────┼─────────────────────────────────┤
-# │ GPIO4       │ DHT22 Data                      │
-# │ GPIO5       │ I²C SDA (OLED Display)          │
-# │ GPIO18      │ I²C SCL (OLED Display)          │
+# │ GPI26       │ DHT22 Data                      │
+# │ GPI21       │ I²C SDA (OLED Display)          │
+# │ GPI22      │ I²C SCL (OLED Display)          │
 # │ GPIO2       │ Status LED (optional - Internal)│
 # │ GPIO16      │ WiFi Signal Sensor (internal)   │
 # └─────────────┴─────────────────────────────────┘
