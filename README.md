@@ -2,7 +2,7 @@
 
 Configuration for an ESP32 running [ESPHome](https://esphome.io/) with a
 DHT22 temperature/humidity sensor. The project exposes the sensor readings to
-Home Assistant, mirrors them on an SSD1306 OLED display, and provides a few
+Home Assistant, mirrors them on an SSD1306 128x32 OLED display, and provides a few
 helper automations such as Wi-Fi status and a restart trigger.
 
 # Confirmed to work with ESPHome v2025.9.2
