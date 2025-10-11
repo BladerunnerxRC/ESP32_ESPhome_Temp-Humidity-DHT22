@@ -53,3 +53,5 @@ them out of source control.
 	- Uptime sensor, refresh button, and runtime-tunable update intervals.
 
 All configuration is in `enviro-b2.yaml`. Secrets (Wi-Fi, API keys) are in `secrets.yaml` and referenced via `!secret`.
+
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/BladerunnerxRC/ESP32_ESPhome_Temp-Humidity-DHT22?utm_source=oss&utm_medium=github&utm_campaign=BladerunnerxRC%2FESP32_ESPhome_Temp-Humidity-DHT22&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
