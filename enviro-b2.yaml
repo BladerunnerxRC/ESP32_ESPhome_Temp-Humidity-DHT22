@@ -111,7 +111,7 @@ wifi:
     then:
       - lambda: 'id(g_wifi_connected) = true;'
       - component.update: enviro_oled     # redraw now
-      - switch.turn_on: onboard_led
+      - switch.turn_off: onboard_led      # CHANGED: LED off when WiFi connected
       - logger.log: "WiFi connected"
       - homeassistant.service:
           service: persistent_notification.create
@@ -261,7 +261,7 @@ interval:
       - lambda: |-
           static uint32_t last = 0;
           const uint32_t now = millis() / 1000;
-          if (now - last >= id(g_update_interval_s)) {
+          if (now - last >= (uint32_t) id(g_update_interval_s)) {  # cast added
             last = now;
             id(dht22_component).update();
           }
@@ -271,10 +271,38 @@ interval:
       - lambda: |-
           static uint32_t last_wifi = 0;
           const uint32_t now = millis() / 1000;
-          if (now - last_wifi >= id(g_update_interval_wifi)) {
+          if (now - last_wifi >= (uint32_t) id(g_update_interval_wifi)) {  # cast added
             last_wifi = now;
             id(wifi_signal_dbm).update();
           }
+
+        # Blink GPIO2 (onboard_led) when WiFi is disconnected, LED off when connected
+  - interval: 1s
+    then:
+      - lambda: |-
+          static bool blink_state = false;
+
+          if (!id(g_wifi_connected)) {
+            // WiFi disconnected -> blink: 1s on, 1s off
+            blink_state = !blink_state;
+
+            if (blink_state) {
+              if (!id(onboard_led).state) {
+                id(onboard_led).turn_on();
+              }
+            } else {
+              if (id(onboard_led).state) {
+                id(onboard_led).turn_off();
+              }
+            }
+          } else {
+            // WiFi connected -> LED should be OFF, but only change if needed
+            blink_state = false;
+            if (id(onboard_led).state) {
+              id(onboard_led).turn_off();
+            }
+          }
+
 
 binary_sensor:
   # Show if the device is online
