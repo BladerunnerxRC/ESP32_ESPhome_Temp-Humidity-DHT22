@@ -1,6 +1,6 @@
-# ESPhome configuration for the ENVIRO-B2 ESP32 board.
+# ESPhome configuration for the ENVIRO-B2 ESP32 board (v1.6.0).
 #
-# works on INFO ESPHome 22025.11.3 and greater 9.3 FW for HW
+# Works with ESPHome 2026.5.3 and later.
 #   - ESP32-D0WDQ6 (revision v1.0)
 #   - Features: WiFi, BT, Dual Core, Coding Scheme None
 #   - 40MHz crystal
@@ -32,6 +32,7 @@ substitutions:
   update_interval_wifi: "60s"
 
 globals:
+  # v1.6.0: runtime-calibrated values and scheduler timestamps
   - id: g_temperature_calibration
     type: float
     restore_value: true
@@ -52,10 +53,19 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+  - id: g_last_dht_update_s
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: g_last_wifi_update_s
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
 
 esphome:
   name: "enviro-b2"
   friendly_name: ENVIRO-B2
+  min_version: 2026.5.3
   on_boot:
     priority: -100
     then:
@@ -64,17 +74,18 @@ esphome:
           id(g_update_interval_wifi) = atoi("${update_interval_wifi}");
 
 esp32:
-  board: esp32dev
+  variant: esp32
   framework:
     type: esp-idf
-    version: recommended # Options: recommended, dev, or latest
+    version: latest # Options: recommended, dev, or latest
+    advanced:
+      minimum_chip_revision: "3.1"
 
 # Enable detailed logging. UART output is disabled because the serial port
 # is not used in normal operation.
 logger:
-  level: DEBUG # Options: ERROR, WARN, INFO, DEBUG, VERY_VERBOSE
-  baud_rate: 115200 # enable UART logging for debugging
-  # baud_rate: 0 # disable UART logging
+  level: WARN # Options: ERROR, WARN, INFO, DEBUG, VERY_VERBOSE
+  baud_rate: 0 # disable UART logging by default
 
 # Enable the Home Assistant API with encrypted communication
 api:
@@ -229,7 +240,6 @@ sensor:
             send_every: 1
             send_first_at: 1
         - lambda: |-
-            if (isnan(x)) return x;
             return x + id(g_temperature_calibration);
     humidity:
       name: "DHT22_Humidity"
@@ -245,7 +255,6 @@ sensor:
             send_every: 1
             send_first_at: 1
         - lambda: |-
-            if (isnan(x)) return x;
             return x + id(g_humidity_calibration);
     update_interval: never # ${update_interval_s}
 
@@ -254,31 +263,33 @@ sensor:
     id: enviro_b2_uptime_sensor
     name: "ENVIRO-B2 Uptime"
 
-# runtime-tunable rates that use globals
+# v1.6.0 runtime scheduler:
+# - sensors run with update_interval: never
+# - this script syncs scheduler timestamps after manual refreshes
+script:
+  - id: sync_refresh_timers
+    mode: queued
+    then:
+      - lambda: |-
+          const uint32_t now = millis() / 1000;
+          id(g_last_dht_update_s) = now;
+          id(g_last_wifi_update_s) = now;
+
 interval:
+  # v1.6.0: single 1s scheduler loop for timed sensor updates and LED state handling
   - interval: 1s
     then:
       - lambda: |-
-          static uint32_t last = 0;
           const uint32_t now = millis() / 1000;
-          if (now - last >= (uint32_t) id(g_update_interval_s)) {  # cast added
-            last = now;
+          if (now - id(g_last_dht_update_s) >= (uint32_t) id(g_update_interval_s)) {
+            id(g_last_dht_update_s) = now;
             id(dht22_component).update();
           }
 
-  - interval: 1s
-    then:
-      - lambda: |-
-          static uint32_t last_wifi = 0;
-          const uint32_t now = millis() / 1000;
-          if (now - last_wifi >= (uint32_t) id(g_update_interval_wifi)) {  # cast added
-            last_wifi = now;
+          if (id(g_wifi_connected) && now - id(g_last_wifi_update_s) >= (uint32_t) id(g_update_interval_wifi)) {
+            id(g_last_wifi_update_s) = now;
             id(wifi_signal_dbm).update();
           }
-
-        # Blink GPIO2 (onboard_led) when WiFi is disconnected, LED off when connected
-  - interval: 1s
-    then:
       - lambda: |-
           static bool blink_state = false;
 
@@ -354,6 +365,7 @@ button:
     name: "Refresh Sensors"
     id: refresh_sensors
     on_press:
+      - script.execute: sync_refresh_timers
       - component.update: dht22_component
       - component.update: wifi_signal_dbm
       - component.update: enviro_b2_uptime_sensor
@@ -399,6 +411,7 @@ number:
       - globals.set:
           id: g_update_interval_s
           value: !lambda 'return (int)x;'
+      - script.execute: sync_refresh_timers
       - button.press: refresh_sensors
 
   - platform: template
@@ -413,4 +426,5 @@ number:
       - globals.set:
           id: g_update_interval_wifi
           value: !lambda 'return (int)x;'
+      - script.execute: sync_refresh_timers
       - button.press: refresh_sensors

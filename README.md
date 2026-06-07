@@ -5,16 +5,20 @@ DHT22 temperature/humidity sensor. The project exposes the sensor readings to
 Home Assistant, mirrors them on an SSD1306 128x32 OLED display, and provides a few
 helper automations such as Wi-Fi status and a restart trigger.
 
+## Release
+
+- Current config release: **v1.6.0** (`enviro-b2.yaml`)
+
 ## Confirmed ESPHome Version
 
 Confirmed to work with:
 
-- (Also tested with ESPHome v2025.11.2)
+- ESPHome v2026.5.3
 
 ## GPIO Assignments
 
-| Pin    | Purpose                                     |
-|--------|---------------------------------------------|
+| Pin    | Purpose                                    |
+|--------|--------------------------------------------|
 | GPIO2  | Onboard status LED (optional - internal)   |
 | GPIO26 | DHT22 Data                                 |
 | GPIO21 | I²C SDA (OLED Display)                     |
@@ -87,6 +91,16 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
     template `number` entities:
     - **DHT22 update interval** (default: 30s).
     - **Wi-Fi signal update interval** (default: 60s).
+  - In v1.6.0, refresh timer state is tracked with:
+    - `g_last_dht_update_s`
+    - `g_last_wifi_update_s`
+    - `sync_refresh_timers` script (keeps manual refreshes and interval scheduling in sync)
+
+- **Runtime Efficiency Updates (v1.6.0):**
+  - ESP32 framework moved to `version: latest`.
+  - `minimum_chip_revision: "3.1"` enabled under ESP-IDF advanced settings.
+  - Default logger overhead reduced (`level: WARN`, `baud_rate: 0`).
+  - Wi-Fi RSSI update path is skipped while disconnected.
 
 - **Other Features:**
   - OTA updates via ESPHome.
