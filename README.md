@@ -48,10 +48,10 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
   - Readings are filtered using:
     - NaN filter
     - Clamp (temperature: -40–80°C, humidity: 0–100%)
-    - Median filter
+    - Median filter (window size: 5)
   - Temperature and humidity can be calibrated via Home Assistant using template `number` entities,
     which write to ESPHome `globals`.
-  - Wi-Fi signal strength is reported using ESP32’s **internal** Wi-Fi RSSI sensor
+  - Wi-Fi signal strength is reported using ESP32's **internal** Wi-Fi RSSI sensor
     (no physical GPIO pin; exposed via `wifi_signal` platform).
 
 - **Display:**
@@ -64,23 +64,28 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
 
 - **Wi-Fi Management & Status LED (GPIO2):**
   - Connects to Wi-Fi with a static IP configuration.
-  - Onboard LED on **GPIO2** is used as a Wi-Fi status indicator:
-    - **Wi-Fi connected:** LED is **off**.
-    - **Wi-Fi disconnected / not yet connected:** LED **blinks** with a 1 second period
-      (1s on, 1s off).
+  - Onboard LED on **GPIO2** indicates connection state with three distinct patterns:
+    - **Fully connected** (Wi-Fi + HA API): LED is **off**.
+    - **Wi-Fi connected, no HA client**: LED blinks **3 long — 1 fast — 3 long** (~7s cycle).
+    - **No Wi-Fi**: LED **blinks** with a 1 second period (1s on, 1s off).
+  - LED state is driven entirely by the 1s interval loop reading `g_wifi_connected`
+    and the `connection_status` binary sensor. No manual LED calls on connect/disconnect.
   - If the Wi-Fi connection is lost for more than 30 seconds, the device will automatically restart.
   - Fallback AP mode is available for recovery.
 
 - **Home Assistant Integration:**
   - Exposes:
-    - DHT22 temperature and humidity sensors.
+    - DHT22 temperature and humidity sensors (`entity_category: none` — primary sensors).
     - Wi-Fi signal strength sensor.
-    - Uptime sensor.
-    - Calibration `number` entities for temperature and humidity.
+    - Uptime sensor (`entity_category: diagnostic`).
+    - Connection status binary sensor (`entity_category: diagnostic`).
+    - Calibration `number` entities for temperature (°C) and humidity (%) — `entity_category: config`.
     - Runtime-tunable `number` entities for:
-      - DHT22 update interval (seconds).
-      - Wi-Fi signal update interval (seconds).
-    - A reboot switch.
+      - DHT22 update interval (seconds) — `entity_category: config`.
+      - Wi-Fi signal update interval (seconds) — `entity_category: config`.
+    - A reboot switch (`entity_category: config`).
+    - A "Refresh Sensors" button for immediate manual update.
+  - All configuration and diagnostic entities are grouped separately in the HA device page.
   - Supports a remote reboot trigger via a Home Assistant `input_boolean`, with a debounce
     to prevent reboots if uptime is too short.
 
@@ -91,13 +96,13 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
     template `number` entities:
     - **DHT22 update interval** (default: 30s).
     - **Wi-Fi signal update interval** (default: 60s).
-  - In v1.6.0, refresh timer state is tracked with:
+  - Refresh timer state is tracked with:
     - `g_last_dht_update_s`
     - `g_last_wifi_update_s`
     - `sync_refresh_timers` script (keeps manual refreshes and interval scheduling in sync)
 
-- **Runtime Efficiency Updates (v1.6.0):**
-  - ESP32 framework moved to `version: latest`.
+- **Runtime Efficiency:**
+  - ESP32 framework set to `version: recommended` for stable, ESPHome-validated builds.
   - `minimum_chip_revision: "3.1"` enabled under ESP-IDF advanced settings.
   - Default logger overhead reduced (`level: WARN`, `baud_rate: 0`).
   - Wi-Fi RSSI update path is skipped while disconnected.
@@ -105,7 +110,7 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
 - **Other Features:**
   - OTA updates via ESPHome.
   - Encrypted API for Home Assistant.
-  - Uptime sensor and a “Refresh Sensors” button to force immediate updates.
+  - Uptime sensor and a "Refresh Sensors" button to force immediate updates.
 
 ## Configuration Files
 
