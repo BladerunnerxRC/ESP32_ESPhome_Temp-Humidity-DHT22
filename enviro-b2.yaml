@@ -122,7 +122,6 @@ wifi:
     then:
       - lambda: 'id(g_wifi_connected) = true;'
       - component.update: enviro_oled     # redraw now
-      - switch.turn_off: onboard_led      # CHANGED: LED off when WiFi connected
       - logger.log: "WiFi connected"
       - homeassistant.service:
           service: persistent_notification.create
@@ -135,7 +134,6 @@ wifi:
     then:
       - lambda: 'id(g_wifi_connected) = false;'
       - component.update: enviro_oled     # hide icon immediately
-      - switch.turn_off: onboard_led
       - logger.log: "WiFi disconnected. Waiting 30 seconds before restart."
       - delay: 30s
       - if:
@@ -264,6 +262,30 @@ sensor:
 # - sensors run with update_interval: never
 # - this script syncs scheduler timestamps after manual refreshes
 script:
+  # WiFi connected but no HA: 3 long - 1 fast - 3 long blink pattern
+  - id: led_no_ha_pattern
+    mode: single
+    then:
+      - repeat:
+          count: 3
+          then:
+            - switch.turn_on: onboard_led
+            - delay: 600ms
+            - switch.turn_off: onboard_led
+            - delay: 200ms
+      - switch.turn_on: onboard_led
+      - delay: 150ms
+      - switch.turn_off: onboard_led
+      - delay: 200ms
+      - repeat:
+          count: 3
+          then:
+            - switch.turn_on: onboard_led
+            - delay: 600ms
+            - switch.turn_off: onboard_led
+            - delay: 200ms
+      - delay: 1000ms
+
   - id: sync_refresh_timers
     mode: queued
     then:
@@ -288,27 +310,25 @@ interval:
             id(wifi_signal_dbm).update();
           }
       - lambda: |-
-          static bool blink_state = false;
-
           if (!id(g_wifi_connected)) {
-            // WiFi disconnected -> blink: 1s on, 1s off
+            // No WiFi: stop pattern script, simple 1s blink
+            id(led_no_ha_pattern).stop();
+            static bool blink_state = false;
             blink_state = !blink_state;
-
             if (blink_state) {
-              if (!id(onboard_led).state) {
-                id(onboard_led).turn_on();
-              }
+              if (!id(onboard_led).state) id(onboard_led).turn_on();
             } else {
-              if (id(onboard_led).state) {
-                id(onboard_led).turn_off();
-              }
+              if (id(onboard_led).state) id(onboard_led).turn_off();
+            }
+          } else if (!id(connection_status).state) {
+            // WiFi up, no HA client: run 3-long 1-fast 3-long pattern
+            if (!id(led_no_ha_pattern).is_running()) {
+              id(led_no_ha_pattern).execute();
             }
           } else {
-            // WiFi connected -> LED should be OFF, but only change if needed
-            blink_state = false;
-            if (id(onboard_led).state) {
-              id(onboard_led).turn_off();
-            }
+            // Fully connected: LED off
+            id(led_no_ha_pattern).stop();
+            if (id(onboard_led).state) id(onboard_led).turn_off();
           }
 
 
