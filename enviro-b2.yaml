@@ -227,7 +227,7 @@ sensor:
       mode: INPUT_PULLUP        # helps if your external pull-up is marginal
     model: DHT22
     temperature:
-      name: "DHT22_Temperature"
+      name: "DHT22 Temperature"
       id: temp
       accuracy_decimals: 1
       filters:  # DHT median + clamp + NaN filter
@@ -237,12 +237,10 @@ sensor:
             max_value: 80
         - median:
             window_size: 5
-            send_every: 1
-            send_first_at: 1
         - lambda: |-
             return x + id(g_temperature_calibration);
     humidity:
-      name: "DHT22_Humidity"
+      name: "DHT22 Humidity"
       id: humidity
       accuracy_decimals: 1
       filters: # DHT median + clamp + NaN filter
@@ -252,8 +250,6 @@ sensor:
             max_value: 100
         - median:
             window_size: 5
-            send_every: 1
-            send_first_at: 1
         - lambda: |-
             return x + id(g_humidity_calibration);
     update_interval: never # ${update_interval_s}
@@ -262,6 +258,7 @@ sensor:
   - platform: uptime
     id: enviro_b2_uptime_sensor
     name: "ENVIRO-B2 Uptime"
+    entity_category: diagnostic
 
 # v1.6.0 runtime scheduler:
 # - sensors run with update_interval: never
@@ -359,6 +356,7 @@ switch:
   - platform: restart
     name: "Reboot_ENVIRO-B2"
     id: reboot_enviro_b2_restart
+    entity_category: config
 
 button:
   - platform: template
