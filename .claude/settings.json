@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(esphome version 2>$null)",
+      "PowerShell(if \\(-not $?\\) { \"esphome not found\" })"
+    ]
+  }
+}

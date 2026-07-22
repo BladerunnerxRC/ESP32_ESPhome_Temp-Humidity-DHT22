@@ -15,7 +15,6 @@
 # │ GPI21       │ I²C SDA (OLED Display)          │
 # │ GPI22       │ I²C SCL (OLED Display)          │
 # │ GPIO2       │ Status LED (optional - Internal)│
-# │ GPIO16      │ WiFi Signal Sensor (internal)   │
 # └─────────────┴─────────────────────────────────┘
 #
 # Notes:
@@ -27,9 +26,9 @@ substitutions:
   # Calibration offsets applied to the DHT22 readings
   temperature_calibration: "0.0"
   humidity_calibration: "0.0"
-  # Measurement intervals
-  update_interval_s: "30s"
-  update_interval_wifi: "60s"
+  # Measurement intervals in seconds (plain numbers; append "s" where a time value is needed)
+  update_interval_s: "30"
+  update_interval_wifi: "60"
 
 globals:
   # v1.6.0: runtime-calibrated values and scheduler timestamps
@@ -44,11 +43,11 @@ globals:
   - id: g_update_interval_s
     type: int
     restore_value: true
-    initial_value: "30"
+    initial_value: "${update_interval_s}"
   - id: g_update_interval_wifi
     type: int
     restore_value: true
-    initial_value: "60"
+    initial_value: "${update_interval_wifi}"
   - id: g_wifi_connected
     type: bool
     restore_value: false
@@ -66,12 +65,8 @@ esphome:
   name: "enviro-b2"
   friendly_name: ENVIRO-B2
   min_version: 2026.5.3
-  on_boot:
-    priority: -100
-    then:
-      - lambda: |-
-          id(g_update_interval_s) = atoi("${update_interval_s}");
-          id(g_update_interval_wifi) = atoi("${update_interval_wifi}");
+  # Interval globals are initialized from substitutions and restored from flash;
+  # no on_boot override so values changed at runtime survive a reboot.
 
 esp32:
   variant: esp32
@@ -121,10 +116,11 @@ wifi:
   on_connect:
     then:
       - lambda: 'id(g_wifi_connected) = true;'
+      - component.update: wifi_signal_dbm # get an RSSI reading right away
       - component.update: enviro_oled     # redraw now
       - logger.log: "WiFi connected"
-      - homeassistant.service:
-          service: persistent_notification.create
+      - homeassistant.action:
+          action: persistent_notification.create
           data:
             title: "ENVIRO-B2"
             message: "WiFi connection established"
@@ -158,15 +154,13 @@ i2c:
 
 font:
   - file: "gfonts://Roboto"
-    id: oled_font_large
-    size: 20
-  - file: "gfonts://Roboto"
     id: oled_font_small
     size: 10
 
 # create directory homeassistant/esphome/images and upload to folder for compiling
 image:
-  - file: "images/wifi.png"
+  - platform: file
+    file: "images/wifi.png"
     id: img_wifi
     resize: 19x16
     type: BINARY
@@ -176,7 +170,7 @@ display:
     id: enviro_oled
     model: "SSD1306 128x32"
     address: 0x3C
-    update_interval: ${update_interval_s}
+    update_interval: ${update_interval_s}s
     lambda: |-
       it.fill(Color::BLACK);
 
@@ -202,7 +196,7 @@ display:
       // Only show the Wi-Fi icon when connected
       if (id(g_wifi_connected)) {
         // center vertically: (32-16)/2 = 8; right-align: 128-19-3 = 106 (3px margin)
-        it.image(106, 8, id(img_wifi), Color(255, 255, 255));
+        it.image(106, 8, id(img_wifi), COLOR_ON);
       }
       // else: do not show the icon when not connected
 
@@ -351,16 +345,16 @@ binary_sensor:
           then:
             - logger.log: "Manual reboot requested via Home Assistant (passes debounce)"
             # Feedback blink removed for simplicity
-            - homeassistant.service:
-                service: input_boolean.turn_off
+            - homeassistant.action:
+                action: input_boolean.turn_off
                 data:
                   entity_id: input_boolean.reboot_enviro_b2
             - logger.log: "Device rebooting now"
             - switch.turn_on: reboot_enviro_b2_restart
           else:
             - logger.log: "Debounce blocked reboot: uptime too short"
-            - homeassistant.service:
-                service: input_boolean.turn_off
+            - homeassistant.action:
+                action: input_boolean.turn_off
                 data:
                   entity_id: input_boolean.reboot_enviro_b2
 
@@ -368,9 +362,11 @@ switch:
   # Controls the onboard LED connected to GPIO2
   - platform: gpio
     name: "Wifi Connect LED Switch"
-    pin: 2
+    pin: GPIO2
     id: onboard_led
     inverted: false # Adjust if LED logic is inverted
+    restore_mode: ALWAYS_OFF # the 1s scheduler owns this LED; start dark after boot
+    entity_category: diagnostic
 
   # Exposes a restart switch
   - platform: restart
@@ -436,7 +432,7 @@ number:
     max_value: 3600
     step: 1
     restore_value: true
-    initial_value: 30
+    initial_value: ${update_interval_s}
     set_action:
       - globals.set:
           id: g_update_interval_s
@@ -455,7 +451,7 @@ number:
     max_value: 3600
     step: 1
     restore_value: true
-    initial_value: 60
+    initial_value: ${update_interval_wifi}
     set_action:
       - globals.set:
           id: g_update_interval_wifi
