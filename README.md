@@ -109,7 +109,8 @@ Both assets are local, so compilation does not need a Google Fonts download.
   - Wi-Fi RSSI update path is skipped while disconnected.
 
 - **Other Features:**
-  - OTA updates via ESPHome.
+  - Required encrypted OTA using the existing API key (ESPHome 2026.9.0+).
+  - Follow the [OTA migration procedure](docs/ota.md) before installing on older firmware.
   - Encrypted API for Home Assistant.
   - Uptime sensor and a "Refresh Sensors" button to force immediate updates.
 
