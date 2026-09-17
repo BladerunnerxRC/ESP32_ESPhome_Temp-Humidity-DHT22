@@ -90,14 +90,16 @@ esp32:
       minimum_chip_revision: "3.1"
       sram1_as_iram: true # Bootloader support confirmed in device logs
 
-# Enable detailed logging. UART output is disabled because the serial port
+# Enable operational logging. UART output is disabled because the serial port
 # is not used in normal operation.
 logger:
-  level: WARN # Options: ERROR, WARN, INFO, DEBUG, VERY_VERBOSE
+  level: INFO # VERBOSE is for short-term diagnosis only
   baud_rate: 0 # disable UART logging by default
 
 # Enable the Home Assistant API with encrypted communication
 api:
+  id: native_api
+  reboot_timeout: 0s # Keep measuring while Home Assistant is unavailable
   encryption:
     key: !secret enviro_b2_api_key
 
@@ -105,11 +107,6 @@ api:
 ota:
   - platform: esphome
     password: !secret enviro_b2_ota_pwd
-
-# Use Home Assistant as the time source
-time:
-  - platform: homeassistant
-    id: ha_time
 
 wifi:
   # Wi-Fi credentials
@@ -124,41 +121,31 @@ wifi:
     subnet: 255.255.255.0
     dns1: 8.8.8.8
     dns2: 8.8.4.4
-  # Turn on the LED when connected and restart the board if the connection is lost.
-  # This will also create a persistent notification in Home Assistant.
-  # If the connection is lost for more than 30 seconds, the device will restart.
+  reboot_timeout: 15min # Native recovery; does not reboot while fallback AP is active
+  # Connection changes update the LED state and OLED immediately.
   on_connect:
     then:
       - lambda: 'id(g_wifi_connected) = true;'
       - component.update: wifi_signal_dbm # get an RSSI reading right away
       - component.update: enviro_oled     # redraw now
-      - logger.log: "WiFi connected"
-      - homeassistant.action:
-          action: persistent_notification.create
-          data:
-            title: "ENVIRO-B2"
-            message: "WiFi connection established"
+      - logger.log:
+          level: INFO
+          format: "WiFi connected"
 
-  # Handle disconnection: wait 30s, then only restart if still offline
+  # Allow native reconnection and fallback AP recovery without a pending reboot.
   on_disconnect:
     then:
       - lambda: 'id(g_wifi_connected) = false;'
       - component.update: enviro_oled     # hide icon immediately
-      - logger.log: "WiFi disconnected. Waiting 30 seconds before restart."
-      - delay: 30s
-      - if:
-          condition:
-            wifi.connected: {}
-          then:
-            - logger.log: "WiFi reconnected during delay, not restarting."
-          else:
-            - logger.log: "Still disconnected, restarting now."
-            - switch.turn_on: reboot_enviro_b2_restart
+      - logger.log:
+          level: WARN
+          format: "WiFi disconnected; reconnecting with fallback AP recovery available"
 
   # Fallback access point settings
   ap:
     ssid: !secret enviro_b2_ap_sid
     password: !secret enviro_b2_ap_pwd
+    ap_timeout: 90s
 
 i2c:
   sda: GPIO21
@@ -215,7 +202,7 @@ display:
       // else: do not show the icon when not connected
 
 
-# captive_portal: # (Optional) Enable captive portal for fallback AP
+captive_portal: # Browser-based network recovery while fallback AP is active
 
 sensor:
   # Report Wi-Fi signal strength
@@ -375,53 +362,30 @@ binary_sensor:
       - script.execute: redraw_display
 
   # Show if the device is online
-  - platform: status
+  - platform: template
     name: "Connection Status"
     id: connection_status
+    device_class: connectivity
     entity_category: diagnostic
-
-  # Trigger a reboot from Home Assistant when the input_boolean is toggled
-  - platform: homeassistant
-    name: "Reboot ENVIRO-B2 Trigger"
-    entity_id: input_boolean.reboot_enviro_b2
-    id: reboot_trigger
-    on_press:
-      - if:
-          condition:
-            lambda: 'return id(enviro_b2_uptime_sensor).state > 60;'
-          then:
-            - logger.log: "Manual reboot requested via Home Assistant (passes debounce)"
-            # Feedback blink removed for simplicity
-            - homeassistant.action:
-                action: input_boolean.turn_off
-                data:
-                  entity_id: input_boolean.reboot_enviro_b2
-            - logger.log: "Device rebooting now"
-            - switch.turn_on: reboot_enviro_b2_restart
-          else:
-            - logger.log: "Debounce blocked reboot: uptime too short"
-            - homeassistant.action:
-                action: input_boolean.turn_off
-                data:
-                  entity_id: input_boolean.reboot_enviro_b2
+    lambda: |-
+      return id(g_wifi_connected) && id(native_api).is_connected_with_state_subscription();
 
 switch:
   # Controls the onboard LED connected to GPIO2
   - platform: gpio
-    name: "Wifi Connect LED Switch"
+    internal: true # The scheduler owns this LED; do not expose a competing control
     pin: GPIO2
     id: onboard_led
     inverted: false # Adjust if LED logic is inverted
     restore_mode: ALWAYS_OFF # the 1s scheduler owns this LED; start dark after boot
     entity_category: diagnostic
 
-  # Exposes a restart switch
+button:
   - platform: restart
     name: "Reboot_ENVIRO-B2"
     id: reboot_enviro_b2_restart
     entity_category: config
 
-button:
   - platform: template
     name: "Refresh Sensors"
     id: refresh_sensors

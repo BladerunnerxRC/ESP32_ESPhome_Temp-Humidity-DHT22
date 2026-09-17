@@ -70,9 +70,11 @@ Both assets are local, so compilation does not need a Google Fonts download.
     - **Wi-Fi connected, no HA client**: LED blinks **3 long — 1 fast — 3 long** (~7s cycle).
     - **No Wi-Fi**: LED **blinks** with a 1 second period (1s on, 1s off).
   - LED state is driven entirely by the 1s interval loop reading `g_wifi_connected`
-    and the `connection_status` binary sensor. No manual LED calls on connect/disconnect.
-  - If the Wi-Fi connection is lost for more than 30 seconds, the device will automatically restart.
-  - Fallback AP mode is available for recovery.
+    and a state-subscribing API client check. Logger-only connections do not count as HA.
+    The LED switch is internal; it cannot be controlled from Home Assistant.
+  - Native Wi-Fi recovery uses a 15-minute timeout; it does not reboot in fallback AP mode.
+  - The fallback AP and captive portal open after 90 seconds.
+  - API disconnection does not reboot the device; it keeps measuring during HA maintenance.
 
 - **Home Assistant Integration:**
   - Exposes:
@@ -84,12 +86,13 @@ Both assets are local, so compilation does not need a Google Fonts download.
     - Runtime-tunable `number` entities for:
       - DHT22 update interval (seconds) — `entity_category: config`.
       - Wi-Fi signal update interval (seconds) — `entity_category: config`.
-    - A reboot switch (`entity_category: config`).
+    - A restart button (`entity_category: config`).
     - A "Refresh Sensors" button with a guarded DHT read after two seconds.
     - A "DHT Readings Stale" problem entity; HA retains the last good sensor values.
   - All configuration and diagnostic entities are grouped separately in the HA device page.
-  - Supports a remote reboot trigger via a Home Assistant `input_boolean`, with a debounce
-    to prevent reboots if uptime is too short.
+  - Replace old restart-switch/helper automations with the new button.
+  - Connection notifications should be implemented in HA after Connection Status turns on.
+  - See [connection recovery and HA migration](docs/connectivity.md).
 
 - **Runtime-Tunable Update Intervals:**
   - Native DHT and Wi-Fi pollers start after restored settings are loaded.
@@ -102,8 +105,8 @@ Both assets are local, so compilation does not need a Google Fonts download.
   - ESP32 framework set to `version: recommended` for stable, ESPHome-validated builds.
   - `minimum_chip_revision: "3.1"` matches the confirmed ESP32 revision.
   - `sram1_as_iram: true` enables 40 KB of additional instruction RAM; the device logs confirm bootloader support.
-  - Default logger overhead reduced (`level: WARN`, `baud_rate: 0`).
-  - ESPHome handles RSSI polling while disconnected; the OLED hides cached RSSI.
+  - Operational logging uses INFO; UART remains disabled (`baud_rate: 0`).
+  - Wi-Fi RSSI update path is skipped while disconnected.
 
 - **Other Features:**
   - OTA updates via ESPHome.
