@@ -13,7 +13,7 @@ helper automations such as Wi-Fi status and a restart trigger.
 
 Confirmed to work with:
 
-- ESPHome v2026.5.3
+- ESPHome v2026.9.0 (user-provided device logs, 2026-09-16)
 
 ## GPIO Assignments
 
@@ -25,8 +25,8 @@ Confirmed to work with:
 | GPIO22 | I²C SCL (OLED Display)                     |
 | —      | WiFi Signal Sensor (internal / virtual)    |
 
-The OLED display refreshes at the same interval as the DHT22 sensor updates (default: 30s),
-and can be adjusted at runtime via Home Assistant.
+DHT22 sampling defaults to 30 seconds and is adjustable in Home Assistant.
+The OLED redraws when readings change and every five seconds for freshness checks.
 
 ## OLED Display Feature
 
@@ -37,18 +37,19 @@ An SSD1306 128x32 OLED display (I²C, address 0x3C) is supported. It shows:
 - Wi-Fi signal strength (dBm)
 - Wi-Fi icon (only when connected)
 
-The display refreshes at the same interval as the DHT22 sensor updates (default: 30s).
-The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
-`/homeassistant/esphome/images` on your Home Assistant server for correct compilation.
+The display follows sensor publications and refreshes every five seconds for freshness checks.
+Keep the image at `images/wifi.png` and the font at
+`fonts/Roboto-Regular.ttf` relative to the YAML on the build host.
+Both assets are local, so compilation does not need a Google Fonts download.
 
 ## Code Functionality Overview
 
 - **Sensor Readings:**
   - DHT22 sensor on **GPIO26** provides temperature and humidity.
   - Readings are filtered using:
-    - NaN filter
-    - Clamp (temperature: -40–80°C, humidity: 0–100%)
-    - Median filter (window size: 5)
+    - Reject nonfinite and out-of-range raw samples (-40–80°C, 0–100%)
+    - Median filter (window size: 5, publish every valid sample)
+    - Calibration followed by humidity saturation to 0–100%
   - Temperature and humidity can be calibrated via Home Assistant using template `number` entities,
     which write to ESPHome `globals`.
   - Wi-Fi signal strength is reported using ESP32's **internal** Wi-Fi RSSI sensor
@@ -59,7 +60,8 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
   - Shows temperature (°F), humidity (%), Wi-Fi signal strength (dBm),
     and a Wi-Fi icon when connected.
   - Display updates on:
-    - The regular sensor refresh interval (default: 30s).
+    - Published readings, coalesced into one redraw after 50ms.
+    - Five-second freshness checks; stale values are displayed as --.
     - Wi-Fi status changes (to immediately show/hide the Wi-Fi icon).
 
 - **Wi-Fi Management & Status LED (GPIO2):**
@@ -69,9 +71,11 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
     - **Wi-Fi connected, no HA client**: LED blinks **3 long — 1 fast — 3 long** (~7s cycle).
     - **No Wi-Fi**: LED **blinks** with a 1 second period (1s on, 1s off).
   - LED state is driven entirely by the 1s interval loop reading `g_wifi_connected`
-    and the `connection_status` binary sensor. No manual LED calls on connect/disconnect.
-  - If the Wi-Fi connection is lost for more than 30 seconds, the device will automatically restart.
-  - Fallback AP mode is available for recovery.
+    and a state-subscribing API client check. Logger-only connections do not count as HA.
+    The LED switch is internal; it cannot be controlled from Home Assistant.
+  - Native Wi-Fi recovery uses a 15-minute timeout; it does not reboot in fallback AP mode.
+  - The fallback AP and captive portal open after 90 seconds.
+  - API disconnection does not reboot the device; it keeps measuring during HA maintenance.
 
 - **Home Assistant Integration:**
   - Exposes:
@@ -83,37 +87,79 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
     - Runtime-tunable `number` entities for:
       - DHT22 update interval (seconds) — `entity_category: config`.
       - Wi-Fi signal update interval (seconds) — `entity_category: config`.
-    - A reboot switch (`entity_category: config`).
-    - A "Refresh Sensors" button for immediate manual update.
+    - A restart button (`entity_category: config`).
+    - A "Refresh Sensors" button with a guarded DHT read after two seconds.
+    - A "DHT Readings Stale" problem entity; HA retains the last good sensor values.
   - All configuration and diagnostic entities are grouped separately in the HA device page.
-  - Supports a remote reboot trigger via a Home Assistant `input_boolean`, with a debounce
-    to prevent reboots if uptime is too short.
+  - Replace old restart-switch/helper automations with the new button.
+  - Connection notifications should be implemented in HA after Connection Status turns on.
+  - See [connection recovery and HA migration](docs/connectivity.md).
 
 - **Runtime-Tunable Update Intervals:**
-  - The DHT22 sensor and Wi-Fi RSSI sensor both run with `update_interval: never` and are
-    driven by ESPHome `interval` blocks.
-  - Intervals are controlled by `globals` and can be adjusted from Home Assistant using
-    template `number` entities:
-    - **DHT22 update interval** (default: 30s).
-    - **Wi-Fi signal update interval** (default: 60s).
-  - Refresh timer state is tracked with:
-    - `g_last_dht_update_s`
-    - `g_last_wifi_update_s`
-    - `sync_refresh_timers` script (keeps manual refreshes and interval scheduling in sync)
+  - Native DHT and Wi-Fi pollers start after restored settings are loaded.
+  - Existing globals are the only persisted settings; template numbers mirror them.
+  - Interval changes replace the native polling intervals, avoiding custom timestamp arithmetic.
+  - Manual refresh pauses DHT polling and enforces two-second spacing around the read.
+  - See [sensor behavior and acceptance checks](docs/sensors.md).
 
 - **Runtime Efficiency:**
   - ESP32 framework set to `version: recommended` for stable, ESPHome-validated builds.
-  - `minimum_chip_revision: "3.1"` enabled under ESP-IDF advanced settings.
-  - Default logger overhead reduced (`level: WARN`, `baud_rate: 0`).
+  - `minimum_chip_revision: "3.1"` matches the confirmed ESP32 revision.
+  - `sram1_as_iram: true` enables 40 KB of additional instruction RAM; the device logs confirm bootloader support.
+  - Operational logging uses INFO; UART remains disabled (`baud_rate: 0`).
   - Wi-Fi RSSI update path is skipped while disconnected.
 
 - **Other Features:**
-  - OTA updates via ESPHome.
+  - Required encrypted OTA using the existing API key (ESPHome 2026.9.0+).
+  - Follow the [OTA migration procedure](docs/ota.md) before installing on older firmware.
   - Encrypted API for Home Assistant.
   - Uptime sensor and a "Refresh Sensors" button to force immediate updates.
 
 ## Configuration Files
 
+Copy the YAML and supporting files to the build host, preserving the subfolders
+shown below.
+
+When building with **ESPHome Builder in Home Assistant**, place `enviro_helpers.h`
+in an `includes/` subfolder beside `enviro-b2.yaml`. If your editor shows the configuration
+folder as `/homeassistant/esphome`, use:
+
+```text
+/homeassistant/esphome/
+├── enviro-b2.yaml
+├── includes/
+│   └── enviro_helpers.h
+├── images/
+│   └── wifi.png
+└── fonts/
+    └── Roboto-Regular.ttf
+```
+
+Some environments expose this folder as `/config/esphome`; use whichever folder
+contains your device YAML. Copy the header using File editor, Studio Code Server,
+or a Samba share, then save it and build again. The YAML references the header
+relative to its own folder:
+
+```yaml
+esphome:
+  includes:
+    - includes/enviro_helpers.h
+```
+
+The font reference is `file: "fonts/Roboto-Regular.ttf"`, relative to the YAML.
+The image reference is `file: "images/wifi.png"`; place the image in
+`/homeassistant/esphome/images/`.
+Keep your existing font in `/homeassistant/esphome/fonts/`; do not replace this
+relative reference with an absolute `/homeassistant` or `/config` path. Builder
+may show `/config/esphome` inside its container while your editor shows
+`/homeassistant/esphome`.
+
 - All primary configuration is in `enviro-b2.yaml`.
 - Secrets (Wi-Fi credentials, API keys, OTA passwords, etc.) are stored in `secrets.yaml`
   and referenced via `!secret` to keep sensitive data out of source control.
+
+## Development validation
+
+Run `python scripts/validate_config.py` with ESPHome 2026.9.0 installed.
+The script builds an isolated copy with dummy secrets; it never uploads firmware.
+Use `--generate-only` for schema validation and C++ generation without compiling.
