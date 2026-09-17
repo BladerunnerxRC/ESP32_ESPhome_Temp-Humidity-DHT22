@@ -66,7 +66,7 @@ esphome:
   friendly_name: ENVIRO-B2
   min_version: 2026.9.0
   includes:
-    - enviro_helpers.h
+    - includes/enviro_helpers.h
   on_boot:
     priority: -100
     then:
@@ -154,14 +154,14 @@ i2c:
   frequency: 400kHz
 
 font:
-  - file: "Roboto-Regular.ttf"
+  - file: "fonts/Roboto-Regular.ttf"
     id: oled_font_small
     size: 10
 
-# Keep the font and image beside this YAML when copying to Device Builder.
+# Keep the image in images/ and the font in fonts/ relative to this YAML.
 image:
   - platform: file
-    file: "wifi.png"
+    file: "images/wifi.png"
     id: img_wifi
     resize: 19x16
     type: BINARY

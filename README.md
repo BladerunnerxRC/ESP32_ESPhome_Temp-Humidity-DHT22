@@ -38,7 +38,8 @@ An SSD1306 128x32 OLED display (I²C, address 0x3C) is supported. It shows:
 - Wi-Fi icon (only when connected)
 
 The display follows sensor publications and refreshes every five seconds for freshness checks.
-Keep `wifi.png` and `Roboto-Regular.ttf` beside `enviro-b2.yaml` on the build host.
+Keep the image at `images/wifi.png` and the font at
+`fonts/Roboto-Regular.ttf` relative to the YAML on the build host.
 Both assets are local, so compilation does not need a Google Fonts download.
 
 ## Code Functionality Overview
@@ -116,23 +117,42 @@ Both assets are local, so compilation does not need a Google Fonts download.
 
 ## Configuration Files
 
-Copy `enviro_helpers.h` alongside the YAML and display assets to the build host.
+Copy the YAML and supporting files to the build host, preserving the subfolders
+shown below.
 
 When building with **ESPHome Builder in Home Assistant**, place `enviro_helpers.h`
-in the same folder as `enviro-b2.yaml`. If your editor shows the configuration
+in an `includes/` subfolder beside `enviro-b2.yaml`. If your editor shows the configuration
 folder as `/homeassistant/esphome`, use:
 
 ```text
 /homeassistant/esphome/
 ├── enviro-b2.yaml
-└── enviro_helpers.h
+├── includes/
+│   └── enviro_helpers.h
+├── images/
+│   └── wifi.png
+└── fonts/
+    └── Roboto-Regular.ttf
 ```
 
 Some environments expose this folder as `/config/esphome`; use whichever folder
 contains your device YAML. Copy the header using File editor, Studio Code Server,
-or a Samba share, then save it and build again. The existing
-`includes: [enviro_helpers.h]` reference is relative to the YAML file, so no YAML
-change is needed when both files are together.
+or a Samba share, then save it and build again. The YAML references the header
+relative to its own folder:
+
+```yaml
+esphome:
+  includes:
+    - includes/enviro_helpers.h
+```
+
+The font reference is `file: "fonts/Roboto-Regular.ttf"`, relative to the YAML.
+The image reference is `file: "images/wifi.png"`; place the image in
+`/homeassistant/esphome/images/`.
+Keep your existing font in `/homeassistant/esphome/fonts/`; do not replace this
+relative reference with an absolute `/homeassistant` or `/config` path. Builder
+may show `/config/esphome` inside its container while your editor shows
+`/homeassistant/esphome`.
 
 - All primary configuration is in `enviro-b2.yaml`.
 - Secrets (Wi-Fi credentials, API keys, OTA passwords, etc.) are stored in `secrets.yaml`

@@ -21,9 +21,10 @@ def main():
     root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix='enviro-') as tmp:
         target = Path(tmp)
-        for name in ('enviro-b2.yaml', 'wifi.png', 'Roboto-Regular.ttf', 'enviro_helpers.h'):
+        for name in ('enviro-b2.yaml', 'images/wifi.png', 'fonts/Roboto-Regular.ttf', 'includes/enviro_helpers.h'):
             source = root / name
             if source.exists():
+                (target / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target / name)
         (target / 'secrets.yaml').write_text(SECRETS, encoding='utf-8')
         command = [sys.executable, '-m', 'esphome', 'compile', str(target / 'enviro-b2.yaml')]

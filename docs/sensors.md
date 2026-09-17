@@ -35,5 +35,6 @@ This avoids back-to-back DHT reads. A median may still contain older samples.
 
 Run the C++ tests in tests/sensor_behavior.cpp with a host C++ compiler. They cover
 validity boundaries, calibration saturation, stale expiry, and millis wraparound.
-Build with ESPHome 2026.9.0 before device testing. Copy enviro_helpers.h alongside
-the YAML and display assets to Device Builder.
+Build with ESPHome 2026.9.0 before device testing. Copy the YAML and its supporting
+files to Device Builder, preserving the relative paths `includes/enviro_helpers.h`,
+`fonts/Roboto-Regular.ttf`, and `images/wifi.png`.
