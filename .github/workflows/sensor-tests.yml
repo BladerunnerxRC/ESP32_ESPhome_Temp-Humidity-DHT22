@@ -1,0 +1,14 @@
+name: Sensor behavior
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+permissions:
+  contents: read
+jobs:
+  sensor-behavior:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: g++ -std=c++17 -Wall -Wextra -Werror tests/sensor_behavior.cpp -o /tmp/sensor-behavior
+      - run: /tmp/sensor-behavior
