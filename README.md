@@ -118,6 +118,22 @@ Both assets are local, so compilation does not need a Google Fonts download.
 
 Copy `enviro_helpers.h` alongside the YAML and display assets to the build host.
 
+When building with **ESPHome Builder in Home Assistant**, place `enviro_helpers.h`
+in the same folder as `enviro-b2.yaml`. If your editor shows the configuration
+folder as `/homeassistant/esphome`, use:
+
+```text
+/homeassistant/esphome/
+├── enviro-b2.yaml
+└── enviro_helpers.h
+```
+
+Some environments expose this folder as `/config/esphome`; use whichever folder
+contains your device YAML. Copy the header using File editor, Studio Code Server,
+or a Samba share, then save it and build again. The existing
+`includes: [enviro_helpers.h]` reference is relative to the YAML file, so no YAML
+change is needed when both files are together.
+
 - All primary configuration is in `enviro-b2.yaml`.
 - Secrets (Wi-Fi credentials, API keys, OTA passwords, etc.) are stored in `secrets.yaml`
   and referenced via `!secret` to keep sensitive data out of source control.
