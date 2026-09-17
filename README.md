@@ -13,7 +13,7 @@ helper automations such as Wi-Fi status and a restart trigger.
 
 Confirmed to work with:
 
-- ESPHome v2026.5.3
+- ESPHome v2026.9.0 (user-provided device logs, 2026-09-16)
 
 ## GPIO Assignments
 
@@ -38,8 +38,8 @@ An SSD1306 128x32 OLED display (I²C, address 0x3C) is supported. It shows:
 - Wi-Fi icon (only when connected)
 
 The display refreshes at the same interval as the DHT22 sensor updates (default: 30s).
-The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
-`/homeassistant/esphome/images` on your Home Assistant server for correct compilation.
+Keep `wifi.png` and `Roboto-Regular.ttf` beside `enviro-b2.yaml` on the build host.
+Both assets are local, so compilation does not need a Google Fonts download.
 
 ## Code Functionality Overview
 
@@ -103,7 +103,8 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
 
 - **Runtime Efficiency:**
   - ESP32 framework set to `version: recommended` for stable, ESPHome-validated builds.
-  - `minimum_chip_revision: "3.1"` enabled under ESP-IDF advanced settings.
+  - `minimum_chip_revision: "3.1"` matches the confirmed ESP32 revision.
+  - `sram1_as_iram: true` enables 40 KB of additional instruction RAM; the device logs confirm bootloader support.
   - Default logger overhead reduced (`level: WARN`, `baud_rate: 0`).
   - Wi-Fi RSSI update path is skipped while disconnected.
 
@@ -117,3 +118,9 @@ The Wi-Fi icon uses the `wifi.png` image, which must be uploaded to
 - All primary configuration is in `enviro-b2.yaml`.
 - Secrets (Wi-Fi credentials, API keys, OTA passwords, etc.) are stored in `secrets.yaml`
   and referenced via `!secret` to keep sensitive data out of source control.
+
+## Development validation
+
+Run `python scripts/validate_config.py` with ESPHome 2026.9.0 installed.
+The script builds an isolated copy with dummy secrets; it never uploads firmware.
+Use `--generate-only` for schema validation and C++ generation without compiling.

@@ -1,7 +1,7 @@
 # ESPhome configuration for the ENVIRO-B2 ESP32 board (v1.6.0).
 #
-# Works with ESPHome 2026.5.3 and later.
-#   - ESP32-D0WDQ6 (revision v1.0)
+# Targets ESPHome 2026.9.0; validate before upgrading to a newer release.
+#   - ESP32 revision v3.1 (confirmed by device logs on 2026-09-16)
 #   - Features: WiFi, BT, Dual Core, Coding Scheme None
 #   - 40MHz crystal
 #   - 4MB flash
@@ -11,9 +11,9 @@
 # ├─────────────┬─────────────────────────────────┤
 # │ GPIO Number │ Function                        │
 # ├─────────────┼─────────────────────────────────┤
-# │ GPI26       │ DHT22 Data                      │
-# │ GPI21       │ I²C SDA (OLED Display)          │
-# │ GPI22       │ I²C SCL (OLED Display)          │
+# │ GPIO26       │ DHT22 Data                      │
+# │ GPIO21       │ I²C SDA (OLED Display)          │
+# │ GPIO22       │ I²C SCL (OLED Display)          │
 # │ GPIO2       │ Status LED (optional - Internal)│
 # └─────────────┴─────────────────────────────────┘
 #
@@ -64,7 +64,7 @@ globals:
 esphome:
   name: "enviro-b2"
   friendly_name: ENVIRO-B2
-  min_version: 2026.5.3
+  min_version: 2026.9.0
   # Interval globals are initialized from substitutions and restored from flash;
   # no on_boot override so values changed at runtime survive a reboot.
 
@@ -75,6 +75,7 @@ esp32:
     version: recommended # Options: recommended, dev, or latest
     advanced:
       minimum_chip_revision: "3.1"
+      sram1_as_iram: true # Bootloader support confirmed in device logs
 
 # Enable detailed logging. UART output is disabled because the serial port
 # is not used in normal operation.
@@ -153,14 +154,14 @@ i2c:
   frequency: 400kHz
 
 font:
-  - file: "gfonts://Roboto"
+  - file: "Roboto-Regular.ttf"
     id: oled_font_small
     size: 10
 
-# create directory homeassistant/esphome/images and upload to folder for compiling
+# Keep the font and image beside this YAML when copying to Device Builder.
 image:
   - platform: file
-    file: "images/wifi.png"
+    file: "wifi.png"
     id: img_wifi
     resize: 19x16
     type: BINARY
