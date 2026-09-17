@@ -103,10 +103,10 @@ api:
   encryption:
     key: !secret enviro_b2_api_key
 
-# Over-the-air update credentials
+# Require encrypted OTA using the existing API key. See docs/ota.md before rollout.
 ota:
   - platform: esphome
-    password: !secret enviro_b2_ota_pwd
+    encryption: {} # Inherit api.encryption.key; do not configure a password
 
 wifi:
   # Wi-Fi credentials
