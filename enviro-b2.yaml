@@ -31,7 +31,7 @@ substitutions:
   update_interval_wifi: "60"
 
 globals:
-  # v1.6.0: runtime-calibrated values and scheduler timestamps
+  # Persisted settings remain authoritative to preserve existing device values.
   - id: g_temperature_calibration
     type: float
     restore_value: true
@@ -52,11 +52,11 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
-  - id: g_last_dht_update_s
+  - id: g_last_temperature_ms
     type: uint32_t
     restore_value: false
     initial_value: '0'
-  - id: g_last_wifi_update_s
+  - id: g_last_humidity_ms
     type: uint32_t
     restore_value: false
     initial_value: '0'
@@ -65,8 +65,21 @@ esphome:
   name: "enviro-b2"
   friendly_name: ENVIRO-B2
   min_version: 2026.9.0
-  # Interval globals are initialized from substitutions and restored from flash;
-  # no on_boot override so values changed at runtime survive a reboot.
+  includes:
+    - enviro_helpers.h
+  on_boot:
+    priority: -100
+    then:
+      # Globals restore before this hook. Numbers are UI mirrors, not a second store.
+      - lambda: |-
+          id(g_update_interval_s) = enviro::valid_interval(id(g_update_interval_s), ${update_interval_s});
+          id(g_update_interval_wifi) = enviro::valid_interval(id(g_update_interval_wifi), ${update_interval_wifi});
+          id(temperature_calibration_number).publish_state(id(g_temperature_calibration));
+          id(humidity_calibration_number).publish_state(id(g_humidity_calibration));
+          id(update_interval_seconds_number).publish_state(id(g_update_interval_s));
+          id(update_interval_wifi_seconds_number).publish_state(id(g_update_interval_wifi));
+      - script.execute: apply_sensor_intervals
+      - script.execute: redraw_display
 
 esp32:
   variant: esp32
@@ -171,24 +184,24 @@ display:
     id: enviro_oled
     model: "SSD1306 128x32"
     address: 0x3C
-    update_interval: ${update_interval_s}s
+    update_interval: 5s # Freshness housekeeping; data changes also trigger immediate redraws
     lambda: |-
       it.fill(Color::BLACK);
 
-      if (id(temp).has_state()) {
+      if (enviro::fresh(millis(), id(g_last_temperature_ms), id(temp).has_state() && std::isfinite(id(temp).state), id(g_update_interval_s))) {
         const float temp_f = id(temp).state * 1.8f + 32.0f;
         it.printf(0, 0, id(oled_font_small), "Temp: %.1f°F", temp_f);
       } else {
         it.print(0, 0, id(oled_font_small), "Temp: --°F");
       }
 
-      if (id(humidity).has_state()) {
+      if (enviro::fresh(millis(), id(g_last_humidity_ms), id(humidity).has_state() && std::isfinite(id(humidity).state), id(g_update_interval_s))) {
         it.printf(0, 11, id(oled_font_small), "Humidity: %.1f%%", id(humidity).state);
       } else {
         it.print(0, 11, id(oled_font_small), "Humidity: --%");
       }
 
-      if (id(wifi_signal_dbm).has_state()) {
+      if (id(g_wifi_connected) && id(wifi_signal_dbm).has_state() && std::isfinite(id(wifi_signal_dbm).state)) {
         it.printf(0, 22, id(oled_font_small), "WiFi: %.0f dBm", id(wifi_signal_dbm).state);
       } else {
         it.print(0, 22, id(oled_font_small), "WiFi: -- dBm");
@@ -209,7 +222,10 @@ sensor:
   - platform: wifi_signal
     name: "WiFi Signal"
     id: wifi_signal_dbm
-    update_interval: never # Turn native intervals off to use Interval Triggers
+    update_interval: never # Started with the restored interval in on_boot
+    entity_category: diagnostic
+    on_value:
+      - script.execute: redraw_display
     device_class: signal_strength
 
   # Temperature and humidity from a DHT22 sensor
@@ -223,29 +239,41 @@ sensor:
       name: "DHT22 Temperature"
       id: temp
       accuracy_decimals: 1
-      filters:  # DHT median + clamp + NaN filter
-        - filter_out: nan
-        - clamp:
-            min_value: -40
-            max_value: 80
+      on_value:
+        then:
+          - lambda: 'id(g_last_temperature_ms) = millis();'
+          - script.execute: redraw_display
+      filters:
+        # Invalid input is rejected; it must not reset the freshness clock.
+        - lambda: |-
+            if (!enviro::valid_sample(x, -40.0f, 80.0f)) return {};
+            return x;
         - median:
             window_size: 5
+            send_every: 1
+            send_first_at: 1
         - lambda: |-
             return x + id(g_temperature_calibration);
     humidity:
       name: "DHT22 Humidity"
       id: humidity
       accuracy_decimals: 1
-      filters: # DHT median + clamp + NaN filter
-        - filter_out: nan
-        - clamp:
-            min_value: 0
-            max_value: 100
+      on_value:
+        then:
+          - lambda: 'id(g_last_humidity_ms) = millis();'
+          - script.execute: redraw_display
+      filters:
+        # Invalid input is rejected; it must not reset the freshness clock.
+        - lambda: |-
+            if (!enviro::valid_sample(x, 0.0f, 100.0f)) return {};
+            return x;
         - median:
             window_size: 5
+            send_every: 1
+            send_first_at: 1
         - lambda: |-
-            return x + id(g_humidity_calibration);
-    update_interval: never # ${update_interval_s}
+            return enviro::calibrated_humidity(x, id(g_humidity_calibration));
+    update_interval: never # Started by apply_sensor_intervals after restoration
 
   # How long the device has been running
   - platform: uptime
@@ -253,9 +281,7 @@ sensor:
     name: "ENVIRO-B2 Uptime"
     entity_category: diagnostic
 
-# v1.6.0 runtime scheduler:
-# - sensors run with update_interval: never
-# - this script syncs scheduler timestamps after manual refreshes
+# Native pollers handle sampling. Scripts coordinate manual refresh and OLED redraw.
 script:
   # WiFi connected but no HA: 3 long - 1 fast - 3 long blink pattern
   - id: led_no_ha_pattern
@@ -281,29 +307,37 @@ script:
             - delay: 200ms
       - delay: 1000ms
 
-  - id: sync_refresh_timers
-    mode: queued
+  - id: redraw_display
+    mode: restart
     then:
-      - lambda: |-
-          const uint32_t now = millis() / 1000;
-          id(g_last_dht_update_s) = now;
-          id(g_last_wifi_update_s) = now;
+      - delay: 50ms # Coalesce the DHT temperature/humidity publications
+      - component.update: enviro_oled
+
+  - id: apply_sensor_intervals
+    mode: single
+    then:
+      # Native pollers randomize their first firing. Apply DHT changes through
+      # the guarded refresh so rapid interval edits cannot cause rapid reads.
+      - script.execute: refresh_dht
+      - component.resume:
+          id: wifi_signal_dbm
+          update_interval: !lambda 'return uint32_t(id(g_update_interval_wifi)) * 1000U;'
+
+  - id: refresh_dht
+    mode: single # Ignore repeated requests during the sensor cooldown
+    then:
+      - component.suspend: dht22_component
+      - delay: 2s # Separate manual sampling from a preceding automatic sample
+      - component.update: dht22_component
+      - delay: 2s
+      - component.resume:
+          id: dht22_component
+          update_interval: !lambda 'return uint32_t(id(g_update_interval_s)) * 1000U;'
 
 interval:
-  # v1.6.0: single 1s scheduler loop for timed sensor updates and LED state handling
+  # LED handling only; native pollers now own sensor scheduling.
   - interval: 1s
     then:
-      - lambda: |-
-          const uint32_t now = millis() / 1000;
-          if (now - id(g_last_dht_update_s) >= (uint32_t) id(g_update_interval_s)) {
-            id(g_last_dht_update_s) = now;
-            id(dht22_component).update();
-          }
-
-          if (id(g_wifi_connected) && now - id(g_last_wifi_update_s) >= (uint32_t) id(g_update_interval_wifi)) {
-            id(g_last_wifi_update_s) = now;
-            id(wifi_signal_dbm).update();
-          }
       - lambda: |-
           if (!id(g_wifi_connected)) {
             // No WiFi: stop pattern script, simple 1s blink
@@ -328,6 +362,18 @@ interval:
 
 
 binary_sensor:
+  - platform: template
+    name: "DHT Readings Stale"
+    id: dht_readings_stale
+    device_class: problem
+    entity_category: diagnostic
+    lambda: |-
+      const uint32_t now = millis();
+      return !enviro::fresh(now, id(g_last_temperature_ms), id(temp).has_state() && std::isfinite(id(temp).state), id(g_update_interval_s)) ||
+             !enviro::fresh(now, id(g_last_humidity_ms), id(humidity).has_state() && std::isfinite(id(humidity).state), id(g_update_interval_s));
+    on_state:
+      - script.execute: redraw_display
+
   # Show if the device is online
   - platform: status
     name: "Connection Status"
@@ -380,10 +426,14 @@ button:
     name: "Refresh Sensors"
     id: refresh_sensors
     on_press:
-      - script.execute: sync_refresh_timers
-      - component.update: dht22_component
-      - component.update: wifi_signal_dbm
+      - script.execute: refresh_dht
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - component.update: wifi_signal_dbm
       - component.update: enviro_b2_uptime_sensor
+      - script.execute: redraw_display
 
 number:
   - platform: template
@@ -396,7 +446,7 @@ number:
     min_value: -10
     max_value: 10
     step: 0.1
-    restore_value: true
+    restore_value: false # The matching global is the only persisted value
     initial_value: ${temperature_calibration}
     set_action:
       - globals.set:
@@ -414,7 +464,7 @@ number:
     min_value: -10
     max_value: 10
     step: 0.1
-    restore_value: true
+    restore_value: false # The matching global is the only persisted value
     initial_value: ${humidity_calibration}
     set_action:
       - globals.set:
@@ -432,14 +482,14 @@ number:
     min_value: 10
     max_value: 3600
     step: 1
-    restore_value: true
+    restore_value: false # The matching global is the only persisted value
     initial_value: ${update_interval_s}
     set_action:
       - globals.set:
           id: g_update_interval_s
           value: !lambda 'return (int)x;'
-      - script.execute: sync_refresh_timers
-      - button.press: refresh_sensors
+      - script.execute: apply_sensor_intervals
+      - script.execute: redraw_display
 
   - platform: template
     name: "WiFi Update Interval (s)"
@@ -451,11 +501,11 @@ number:
     min_value: 10
     max_value: 3600
     step: 1
-    restore_value: true
+    restore_value: false # The matching global is the only persisted value
     initial_value: ${update_interval_wifi}
     set_action:
       - globals.set:
           id: g_update_interval_wifi
           value: !lambda 'return (int)x;'
-      - script.execute: sync_refresh_timers
-      - button.press: refresh_sensors
+      - script.execute: apply_sensor_intervals
+      - script.execute: redraw_display

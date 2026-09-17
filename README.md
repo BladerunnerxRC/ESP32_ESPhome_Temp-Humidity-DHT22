@@ -25,8 +25,8 @@ Confirmed to work with:
 | GPIO22 | I²C SCL (OLED Display)                     |
 | —      | WiFi Signal Sensor (internal / virtual)    |
 
-The OLED display refreshes at the same interval as the DHT22 sensor updates (default: 30s),
-and can be adjusted at runtime via Home Assistant.
+DHT22 sampling defaults to 30 seconds and is adjustable in Home Assistant.
+The OLED redraws when readings change and every five seconds for freshness checks.
 
 ## OLED Display Feature
 
@@ -37,7 +37,7 @@ An SSD1306 128x32 OLED display (I²C, address 0x3C) is supported. It shows:
 - Wi-Fi signal strength (dBm)
 - Wi-Fi icon (only when connected)
 
-The display refreshes at the same interval as the DHT22 sensor updates (default: 30s).
+The display follows sensor publications and refreshes every five seconds for freshness checks.
 Keep `wifi.png` and `Roboto-Regular.ttf` beside `enviro-b2.yaml` on the build host.
 Both assets are local, so compilation does not need a Google Fonts download.
 
@@ -46,9 +46,9 @@ Both assets are local, so compilation does not need a Google Fonts download.
 - **Sensor Readings:**
   - DHT22 sensor on **GPIO26** provides temperature and humidity.
   - Readings are filtered using:
-    - NaN filter
-    - Clamp (temperature: -40–80°C, humidity: 0–100%)
-    - Median filter (window size: 5)
+    - Reject nonfinite and out-of-range raw samples (-40–80°C, 0–100%)
+    - Median filter (window size: 5, publish every valid sample)
+    - Calibration followed by humidity saturation to 0–100%
   - Temperature and humidity can be calibrated via Home Assistant using template `number` entities,
     which write to ESPHome `globals`.
   - Wi-Fi signal strength is reported using ESP32's **internal** Wi-Fi RSSI sensor
@@ -59,7 +59,8 @@ Both assets are local, so compilation does not need a Google Fonts download.
   - Shows temperature (°F), humidity (%), Wi-Fi signal strength (dBm),
     and a Wi-Fi icon when connected.
   - Display updates on:
-    - The regular sensor refresh interval (default: 30s).
+    - Published readings, coalesced into one redraw after 50ms.
+    - Five-second freshness checks; stale values are displayed as --.
     - Wi-Fi status changes (to immediately show/hide the Wi-Fi icon).
 
 - **Wi-Fi Management & Status LED (GPIO2):**
@@ -84,29 +85,25 @@ Both assets are local, so compilation does not need a Google Fonts download.
       - DHT22 update interval (seconds) — `entity_category: config`.
       - Wi-Fi signal update interval (seconds) — `entity_category: config`.
     - A reboot switch (`entity_category: config`).
-    - A "Refresh Sensors" button for immediate manual update.
+    - A "Refresh Sensors" button with a guarded DHT read after two seconds.
+    - A "DHT Readings Stale" problem entity; HA retains the last good sensor values.
   - All configuration and diagnostic entities are grouped separately in the HA device page.
   - Supports a remote reboot trigger via a Home Assistant `input_boolean`, with a debounce
     to prevent reboots if uptime is too short.
 
 - **Runtime-Tunable Update Intervals:**
-  - The DHT22 sensor and Wi-Fi RSSI sensor both run with `update_interval: never` and are
-    driven by ESPHome `interval` blocks.
-  - Intervals are controlled by `globals` and can be adjusted from Home Assistant using
-    template `number` entities:
-    - **DHT22 update interval** (default: 30s).
-    - **Wi-Fi signal update interval** (default: 60s).
-  - Refresh timer state is tracked with:
-    - `g_last_dht_update_s`
-    - `g_last_wifi_update_s`
-    - `sync_refresh_timers` script (keeps manual refreshes and interval scheduling in sync)
+  - Native DHT and Wi-Fi pollers start after restored settings are loaded.
+  - Existing globals are the only persisted settings; template numbers mirror them.
+  - Interval changes replace the native polling intervals, avoiding custom timestamp arithmetic.
+  - Manual refresh pauses DHT polling and enforces two-second spacing around the read.
+  - See [sensor behavior and acceptance checks](docs/sensors.md).
 
 - **Runtime Efficiency:**
   - ESP32 framework set to `version: recommended` for stable, ESPHome-validated builds.
   - `minimum_chip_revision: "3.1"` matches the confirmed ESP32 revision.
   - `sram1_as_iram: true` enables 40 KB of additional instruction RAM; the device logs confirm bootloader support.
   - Default logger overhead reduced (`level: WARN`, `baud_rate: 0`).
-  - Wi-Fi RSSI update path is skipped while disconnected.
+  - ESPHome handles RSSI polling while disconnected; the OLED hides cached RSSI.
 
 - **Other Features:**
   - OTA updates via ESPHome.
@@ -114,6 +111,8 @@ Both assets are local, so compilation does not need a Google Fonts download.
   - Uptime sensor and a "Refresh Sensors" button to force immediate updates.
 
 ## Configuration Files
+
+Copy `enviro_helpers.h` alongside the YAML and display assets to the build host.
 
 - All primary configuration is in `enviro-b2.yaml`.
 - Secrets (Wi-Fi credentials, API keys, OTA passwords, etc.) are stored in `secrets.yaml`
