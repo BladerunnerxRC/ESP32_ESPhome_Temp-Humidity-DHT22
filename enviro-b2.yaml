@@ -89,7 +89,7 @@ esp32:
     advanced:
       minimum_chip_revision: "3.1"
       sram1_as_iram: true # Bootloader support confirmed in device logs
-
+      flash_chip: generic
 # Enable operational logging. UART output is disabled because the serial port
 # is not used in normal operation.
 logger:
